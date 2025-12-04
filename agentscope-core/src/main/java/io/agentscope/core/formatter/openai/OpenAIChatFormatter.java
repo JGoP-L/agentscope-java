@@ -90,4 +90,19 @@ public class OpenAIChatFormatter
             ChatCompletionCreateParams.Builder paramsBuilder, ToolChoice toolChoice) {
         toolsHelper.applyToolChoice(paramsBuilder, toolChoice);
     }
+
+    /**
+     * Apply thinking configuration to OpenAI request parameters.
+     * Note: Thinking mode is only supported for o1 and o1-mini models.
+     *
+     * @param paramsBuilder OpenAI request parameters builder
+     * @param options Generation options containing thinking budget
+     * @param defaultOptions Default options with fallback thinking budget
+     */
+    public void applyThinking(
+            ChatCompletionCreateParams.Builder paramsBuilder,
+            GenerateOptions options,
+            GenerateOptions defaultOptions) {
+        toolsHelper.applyThinking(paramsBuilder, options, defaultOptions);
+    }
 }

@@ -26,6 +26,7 @@ import com.openai.models.chat.completions.ChatCompletionMessageParam;
 import io.agentscope.core.Version;
 import io.agentscope.core.formatter.Formatter;
 import io.agentscope.core.formatter.openai.OpenAIChatFormatter;
+import io.agentscope.core.formatter.openai.OpenAIToolsHelper;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.tracing.TracerRegistry;
 import java.time.Instant;
@@ -52,6 +53,7 @@ public class OpenAIChatModel extends ChatModelBase {
     private final boolean streamEnabled;
     private final OpenAIClient client;
     private final GenerateOptions defaultOptions;
+    private final Boolean enableThinking;
     private final Formatter<ChatCompletionMessageParam, Object, ChatCompletionCreateParams.Builder>
             formatter;
 
@@ -60,9 +62,10 @@ public class OpenAIChatModel extends ChatModelBase {
      *
      * @param baseUrl the base URL for OpenAI API (null for default)
      * @param apiKey the API key for authentication (null for no authentication)
-     * @param modelName the model name to use (e.g., "gpt-4", "gpt-3.5-turbo")
+     * @param modelName the model name to use (e.g., "gpt-4", "gpt-3.5-turbo", "o1", "o1-mini")
      * @param streamEnabled whether streaming should be enabled
      * @param defaultOptions default generation options
+     * @param enableThinking whether thinking mode should be enabled (for o1 models)
      * @param formatter the message formatter to use (null for default OpenAI formatter)
      */
     public OpenAIChatModel(
@@ -71,6 +74,7 @@ public class OpenAIChatModel extends ChatModelBase {
             String modelName,
             boolean streamEnabled,
             GenerateOptions defaultOptions,
+            Boolean enableThinking,
             Formatter<ChatCompletionMessageParam, Object, ChatCompletionCreateParams.Builder>
                     formatter) {
         this.baseUrl = baseUrl;
@@ -80,6 +84,7 @@ public class OpenAIChatModel extends ChatModelBase {
         this.streamEnabled = streamEnabled;
         this.defaultOptions =
                 defaultOptions != null ? defaultOptions : GenerateOptions.builder().build();
+        this.enableThinking = enableThinking;
         this.formatter = formatter != null ? formatter : new OpenAIChatFormatter();
 
         // Initialize OpenAI client
@@ -163,6 +168,10 @@ public class OpenAIChatModel extends ChatModelBase {
                                                                 options,
                                                                 defaultOptions);
 
+                                                        // Apply thinking configuration if enabled
+                                                        applyThinkingIfAvailable(
+                                                                paramsBuilder, options);
+
                                                         // Apply tool choice if available
                                                         applyToolChoiceIfAvailable(
                                                                 paramsBuilder, options);
@@ -171,7 +180,13 @@ public class OpenAIChatModel extends ChatModelBase {
                                                         ChatCompletionCreateParams params =
                                                                 paramsBuilder.build();
 
-                                                        if (streamEnabled) {
+                                                        // Check if thinking mode is enabled
+                                                        boolean actualStreamEnabled =
+                                                                streamEnabled
+                                                                        && !isThinkingEnabled(
+                                                                                options);
+
+                                                        if (actualStreamEnabled) {
                                                             // Make streaming API call
                                                             StreamResponse<ChatCompletionChunk>
                                                                     streamResponse =
@@ -266,6 +281,34 @@ public class OpenAIChatModel extends ChatModelBase {
     }
 
     /**
+     * Apply thinking configuration if enabled and budget is available.
+     *
+     * @param paramsBuilder OpenAI request parameters builder
+     * @param options Generation options containing thinking budget
+     */
+    private void applyThinkingIfAvailable(
+            ChatCompletionCreateParams.Builder paramsBuilder, GenerateOptions options) {
+        if (isThinkingEnabled(options)) {
+            OpenAIToolsHelper toolsHelper = new OpenAIToolsHelper();
+            toolsHelper.applyThinking(paramsBuilder, options, defaultOptions);
+        }
+    }
+
+    /**
+     * Check if thinking mode should be enabled based on model configuration and options.
+     *
+     * @param options Generation options that may contain thinking budget
+     * @return true if thinking mode is enabled, false otherwise
+     */
+    private boolean isThinkingEnabled(GenerateOptions options) {
+        if (!Boolean.TRUE.equals(enableThinking)) {
+            return false;
+        }
+        GenerateOptions opt = options != null ? options : defaultOptions;
+        return opt != null && opt.getThinkingBudget() != null;
+    }
+
+    /**
      * Creates a new builder for OpenAIChatModel.
      *
      * @return a new Builder instance
@@ -280,6 +323,7 @@ public class OpenAIChatModel extends ChatModelBase {
         private String modelName;
         private boolean streamEnabled = true;
         private GenerateOptions defaultOptions = null;
+        private Boolean enableThinking = null;
         private Formatter<ChatCompletionMessageParam, Object, ChatCompletionCreateParams.Builder>
                 formatter;
 
@@ -339,6 +383,18 @@ public class OpenAIChatModel extends ChatModelBase {
         }
 
         /**
+         * Sets whether thinking mode should be enabled for o1 models.
+         * Note: Thinking mode automatically disables streaming and tool calling.
+         *
+         * @param enableThinking true to enable thinking mode, false to disable, null for default (disabled)
+         * @return this builder instance
+         */
+        public Builder enableThinking(Boolean enableThinking) {
+            this.enableThinking = enableThinking;
+            return this;
+        }
+
+        /**
          * Sets the message formatter to use.
          *
          * @param formatter the formatter (null for default OpenAI formatter)
@@ -369,7 +425,13 @@ public class OpenAIChatModel extends ChatModelBase {
                     ModelUtils.ensureDefaultExecutionConfig(defaultOptions);
 
             return new OpenAIChatModel(
-                    baseUrl, apiKey, modelName, streamEnabled, effectiveOptions, formatter);
+                    baseUrl,
+                    apiKey,
+                    modelName,
+                    streamEnabled,
+                    effectiveOptions,
+                    enableThinking,
+                    formatter);
         }
     }
 }

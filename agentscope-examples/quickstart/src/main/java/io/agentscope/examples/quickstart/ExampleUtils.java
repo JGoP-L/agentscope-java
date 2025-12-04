@@ -74,8 +74,8 @@ public class ExampleUtils {
             throws IOException {
 
         // 1. Try environment variable
-        String apiKey = System.getenv(envVarName);
-
+        //        String apiKey = System.getenv(envVarName);
+        String apiKey = "sk-c2117f175aac420e8271fb2b2de4babe";
         if (apiKey != null && !apiKey.isEmpty()) {
             System.out.println("✓ Using API key from environment variable " + envVarName + "\n");
             return apiKey;

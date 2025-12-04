@@ -328,6 +328,38 @@ public class OpenAIToolsHelper {
 
         log.debug(
                 "Applied tool choice: {}",
-                toolChoice != null ? toolChoice.getClass().getSimpleName() : "Auto");
+                toolChoice != null ? toolChoice.getClass().getSimpleName() : "auto");
+    }
+
+    /**
+     * Apply thinking configuration to OpenAI request parameters.
+     * Note: Thinking mode is only supported for o1 and o1-mini models.
+     *
+     * @param paramsBuilder OpenAI request parameters builder
+     * @param options Generation options containing thinking budget
+     * @param defaultOptions Default options with fallback thinking budget
+     */
+    public void applyThinking(
+            ChatCompletionCreateParams.Builder paramsBuilder,
+            GenerateOptions options,
+            GenerateOptions defaultOptions) {
+        // Get thinking budget from options with fallback to defaultOptions
+        Integer thinkingBudget = null;
+        if (options != null && options.getThinkingBudget() != null) {
+            thinkingBudget = options.getThinkingBudget();
+        } else if (defaultOptions != null && defaultOptions.getThinkingBudget() != null) {
+            thinkingBudget = defaultOptions.getThinkingBudget();
+        }
+
+        // Only apply thinking if budget is set
+        if (thinkingBudget != null && thinkingBudget > 0) {
+            Map<String, Object> thinking = new java.util.HashMap<>();
+            thinking.put("type", "enabled");
+            thinking.put("budget_tokens", thinkingBudget);
+
+            paramsBuilder.putAdditionalBodyProperty("thinking", JsonValue.from(thinking));
+            log.debug(
+                    "Applied OpenAI thinking configuration with budget: {} tokens", thinkingBudget);
+        }
     }
 }
