@@ -254,11 +254,12 @@ class SkillToolFactory {
     }
 
     /**
-     * Validate skill exists and activate it and its tool group.
+     * Validates that a skill is registered and returns its instance.
      *
      * @param skillId The unique identifier of the skill
-     * @return The skill instance
-     * @throws IllegalArgumentException if skill doesn't exist
+     * @return The registered skill instance
+     * @throws IllegalArgumentException if the skill is not registered
+     * @throws IllegalStateException if the skill cannot be loaded after validation
      */
     private AgentSkill validateSkillExists(String skillId) {
         if (!skillRegistry.exists(skillId)) {
