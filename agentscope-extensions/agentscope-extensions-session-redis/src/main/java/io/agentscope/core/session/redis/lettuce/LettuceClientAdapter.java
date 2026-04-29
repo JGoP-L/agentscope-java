@@ -218,6 +218,15 @@ public class LettuceClientAdapter implements RedisClientAdapter {
     }
 
     @Override
+    public void removeFromSet(String key, String member) {
+        if (commands != null) {
+            commands.srem(key, member);
+        } else {
+            clusterCommands.srem(key, member);
+        }
+    }
+
+    @Override
     public Set<String> getSetMembers(String key) {
         if (commands != null) {
             return new HashSet<>(commands.smembers(key));

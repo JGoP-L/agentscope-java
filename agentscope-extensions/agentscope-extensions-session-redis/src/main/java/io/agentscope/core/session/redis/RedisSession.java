@@ -349,6 +349,19 @@ public class RedisSession implements Session {
     }
 
     @Override
+    public void delete(SessionKey sessionKey, String key) {
+        String sessionId = sessionKey.toIdentifier();
+        String keysKey = getKeysKey(sessionId);
+
+        try {
+            client.deleteKeys(getStateKey(sessionId, key));
+            client.removeFromSet(keysKey, key);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to delete state: " + key, e);
+        }
+    }
+
+    @Override
     public Set<SessionKey> listSessionKeys() {
         try {
             Set<String> keysKeys = client.findKeysByPattern(keyPrefix + "*" + KEYS_SUFFIX);
