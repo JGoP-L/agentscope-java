@@ -93,6 +93,16 @@ public interface RedisClientAdapter {
     void addToSet(String key, String member);
 
     /**
+     * Remove a member from a set.
+     *
+     * @param key the Redis set key
+     * @param member the member to remove
+     */
+    default void removeFromSet(String key, String member) {
+        // Default no-op for custom adapters that do not track session keys in a Redis set.
+    }
+
+    /**
      * Get all members of a set.
      *
      * @param key the Redis set key

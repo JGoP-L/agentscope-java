@@ -207,6 +207,22 @@ class LettuceSessionTest {
         }
 
         @Test
+        @DisplayName("Should delete single state key and remove tracking metadata")
+        void testDeleteSingleStateKey() {
+            RedisSession session =
+                    RedisSession.builder()
+                            .lettuceClient(redisClient)
+                            .keyPrefix("agentscope:session:")
+                            .build();
+
+            SessionKey sessionKey = SimpleSessionKey.of("session1");
+            session.delete(sessionKey, "shutdown_interrupted");
+
+            verify(commands).del("agentscope:session:session1:shutdown_interrupted");
+            verify(commands).srem("agentscope:session:session1:_keys", "shutdown_interrupted");
+        }
+
+        @Test
         @DisplayName("Should list session keys correctly")
         void testListSessionKeys() {
             KeyScanCursor<String> scanResult = mock(KeyScanCursor.class);
@@ -422,6 +438,23 @@ class LettuceSessionTest {
             session.delete(sessionKey);
 
             verify(clusterCommands).smembers("agentscope:session:clusterSession:_keys");
+        }
+
+        @Test
+        @DisplayName("Should delete single state key and remove tracking metadata in cluster mode")
+        void testDeleteSingleStateKeyCluster() {
+            RedisSession session =
+                    RedisSession.builder()
+                            .lettuceClusterClient(redisClusterClient)
+                            .keyPrefix("agentscope:session:")
+                            .build();
+
+            SessionKey sessionKey = SimpleSessionKey.of("clusterSession");
+            session.delete(sessionKey, "shutdown_interrupted");
+
+            verify(clusterCommands).del("agentscope:session:clusterSession:shutdown_interrupted");
+            verify(clusterCommands)
+                    .srem("agentscope:session:clusterSession:_keys", "shutdown_interrupted");
         }
 
         @Test

@@ -27,12 +27,17 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.agentscope.core.agent.Agent;
+import io.agentscope.core.shutdown.GracefulShutdownManager;
+import io.agentscope.core.shutdown.ShutdownInterruptedState;
 import io.agentscope.core.state.SessionKey;
 import io.agentscope.core.state.SimpleSessionKey;
 import io.agentscope.core.state.State;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
@@ -222,6 +227,66 @@ class JedisSessionTest {
     }
 
     @Test
+    @DisplayName("Should delete single state key and remove tracking metadata")
+    void testDeleteSingleStateKey() {
+        RedisSession session =
+                RedisSession.builder()
+                        .jedisClient(unifiedJedis)
+                        .keyPrefix("agentscope:session:")
+                        .build();
+
+        SessionKey sessionKey = SimpleSessionKey.of("session1");
+        session.delete(sessionKey, "shutdown_interrupted");
+
+        verify(unifiedJedis).del(new String[] {"agentscope:session:session1:shutdown_interrupted"});
+        verify(unifiedJedis).srem("agentscope:session:session1:_keys", "shutdown_interrupted");
+    }
+
+    @Test
+    @DisplayName("Should not return single state after deleting it")
+    void testDeleteSingleStateKeyRemovesPersistedValue() {
+        RedisSession session =
+                RedisSession.builder()
+                        .clientAdapter(new StatefulRedisClientAdapter())
+                        .keyPrefix("agentscope:session:")
+                        .build();
+
+        SessionKey sessionKey = SimpleSessionKey.of("session1");
+        session.save(sessionKey, "shutdown_interrupted", new TestState("interrupted", 1));
+
+        assertTrue(session.get(sessionKey, "shutdown_interrupted", TestState.class).isPresent());
+
+        session.delete(sessionKey, "shutdown_interrupted");
+
+        assertFalse(session.get(sessionKey, "shutdown_interrupted", TestState.class).isPresent());
+    }
+
+    @Test
+    @DisplayName("Should clear shutdown interrupted flag after first manager check")
+    void testManagerCheckAndClearShutdownInterruptedWithRedisSession() {
+        GracefulShutdownManager manager = GracefulShutdownManager.getInstance();
+        manager.resetForTesting();
+        try {
+            RedisSession session =
+                    RedisSession.builder()
+                            .clientAdapter(new StatefulRedisClientAdapter())
+                            .keyPrefix("agentscope:session:")
+                            .build();
+            SessionKey sessionKey = SimpleSessionKey.of("session1");
+            Agent agent = mock(Agent.class);
+            when(agent.getAgentId()).thenReturn("agent-1");
+
+            session.save(sessionKey, "shutdown_interrupted", new ShutdownInterruptedState(true));
+            manager.bindSession(agent, session, sessionKey);
+
+            assertTrue(manager.checkAndClearShutdownInterrupted(agent));
+            assertFalse(manager.checkAndClearShutdownInterrupted(agent));
+        } finally {
+            manager.resetForTesting();
+        }
+    }
+
+    @Test
     @DisplayName("Should list all session keys")
     void testListSessionKeys() {
         Set<String> keysKeys = new HashSet<>();
@@ -280,4 +345,76 @@ class JedisSessionTest {
 
     /** Simple test state record for testing. */
     public record TestState(String value, int count) implements State {}
+
+    private static class StatefulRedisClientAdapter implements RedisClientAdapter {
+
+        private final Map<String, String> values = new HashMap<>();
+        private final Map<String, Set<String>> sets = new HashMap<>();
+
+        @Override
+        public void set(String key, String value) {
+            values.put(key, value);
+        }
+
+        @Override
+        public String get(String key) {
+            return values.get(key);
+        }
+
+        @Override
+        public void rightPushList(String key, String value) {}
+
+        @Override
+        public List<String> rangeList(String key, long start, long end) {
+            return List.of();
+        }
+
+        @Override
+        public long getListLength(String key) {
+            return 0;
+        }
+
+        @Override
+        public void deleteKeys(String... keys) {
+            for (String key : keys) {
+                values.remove(key);
+            }
+        }
+
+        @Override
+        public void addToSet(String key, String member) {
+            sets.computeIfAbsent(key, unused -> new HashSet<>()).add(member);
+        }
+
+        @Override
+        public void removeFromSet(String key, String member) {
+            Set<String> members = sets.get(key);
+            if (members != null) {
+                members.remove(member);
+            }
+        }
+
+        @Override
+        public Set<String> getSetMembers(String key) {
+            return sets.getOrDefault(key, Set.of());
+        }
+
+        @Override
+        public long getSetSize(String key) {
+            return getSetMembers(key).size();
+        }
+
+        @Override
+        public boolean keyExists(String key) {
+            return values.containsKey(key) || sets.containsKey(key);
+        }
+
+        @Override
+        public Set<String> findKeysByPattern(String pattern) {
+            return Set.of();
+        }
+
+        @Override
+        public void close() {}
+    }
 }

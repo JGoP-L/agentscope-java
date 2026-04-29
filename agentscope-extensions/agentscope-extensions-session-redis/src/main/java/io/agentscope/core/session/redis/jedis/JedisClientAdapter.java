@@ -137,6 +137,11 @@ public class JedisClientAdapter implements RedisClientAdapter {
     }
 
     @Override
+    public void removeFromSet(String key, String member) {
+        unifiedJedis.srem(key, member);
+    }
+
+    @Override
     public Set<String> getSetMembers(String key) {
         return unifiedJedis.smembers(key);
     }

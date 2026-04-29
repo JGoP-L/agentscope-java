@@ -185,6 +185,12 @@ public class RedissonClientAdapter implements RedisClientAdapter {
     }
 
     @Override
+    public void removeFromSet(String key, String member) {
+        RSet<String> rSet = redissonClient.getSet(key, StringCodec.INSTANCE);
+        rSet.remove(member);
+    }
+
+    @Override
     public Set<String> getSetMembers(String key) {
         RSet<String> rSet = redissonClient.getSet(key, StringCodec.INSTANCE);
         return new HashSet<>(rSet);

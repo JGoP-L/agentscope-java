@@ -252,6 +252,22 @@ class RedissonSessionTest {
     }
 
     @Test
+    @DisplayName("Should delete single state key and remove tracking metadata")
+    void testDeleteSingleStateKey() {
+        RedisSession session =
+                RedisSession.builder()
+                        .redissonClient(redissonClient)
+                        .keyPrefix("agentscope:session:")
+                        .build();
+
+        SessionKey sessionKey = SimpleSessionKey.of("session1");
+        session.delete(sessionKey, "shutdown_interrupted");
+
+        verify(keys).delete("agentscope:session:session1:shutdown_interrupted");
+        verify(rSet).remove("shutdown_interrupted");
+    }
+
+    @Test
     @DisplayName("Should list all session keys")
     void testListSessionKeys() {
         when(redissonClient.getKeys()).thenReturn(keys);
